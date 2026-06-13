@@ -55,20 +55,20 @@ echo ""
 # 3. 编译测试
 echo "3. 编译测试"
 run_test "清理构建" "make clean"
-run_test "编译项目" "make"
+run_test "编译项目" "make build"
 run_test "编译测试程序" "make test"
 echo ""
 
 # 4. 功能测试
 echo "4. 功能测试"
-run_test "帮助信息" "./linuxhud --help"
-run_test "DRM测试程序" "./test_drm"
+run_test "帮助信息" "./build/bin/linuxhud --help"
+run_test "DRM测试程序" "./build/bin/test_drm"
 echo ""
 
 # 5. 检查生成的文件
 echo "5. 检查生成的文件"
-run_test "可执行文件" "test -x linuxhud"
-run_test "测试可执行文件" "test -x test_drm"
+run_test "可执行文件" "test -x build/bin/linuxhud"
+run_test "测试可执行文件" "test -x build/bin/test_drm"
 echo ""
 
 # 6. 检查配置文件
@@ -90,7 +90,7 @@ if [ $TESTS_FAILED -eq 0 ]; then
     echo ""
     echo "下一步："
     echo "  1. 运行演示: sudo ./run_demo.sh"
-    echo "  2. 手动测试: sudo ./linuxhud -t 'Hello World'"
+    echo "  2. 手动测试: sudo ./build/bin/linuxhud -t 'Hello World'"
     echo "  3. 查看文档: cat README.md"
 else
     echo -e "${RED}有测试失败，请检查错误信息。${NC}"

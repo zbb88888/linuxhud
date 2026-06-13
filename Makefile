@@ -207,6 +207,71 @@ test-quick: dirs $(TEST_BINS)
 		./$$test_bin > /dev/null 2>&1 && echo "  ✓ $$test_bin" || echo "  ✗ $$test_bin"; \
 	done
 
+.PHONY: test-all
+test-all: build test test-scripts
+	@echo ""
+	@echo "=========================================="
+	@echo "  所有测试完成"
+	@echo "=========================================="
+
+.PHONY: test-scripts
+test-scripts:
+	@echo "运行测试脚本..."
+	@chmod +x test_project.sh test_makefile.sh 2>/dev/null || true
+	@echo ""
+	@echo "--- 项目结构测试 ---"
+	@./test_project.sh
+	@echo ""
+	@echo "--- 构建系统测试 ---"
+	@./test_makefile.sh
+
+.PHONY: test-project
+test-project:
+	@echo "运行项目结构测试..."
+	@chmod +x test_project.sh 2>/dev/null || true
+	@./test_project.sh
+
+.PHONY: test-build-system
+test-build-system:
+	@echo "运行构建系统测试..."
+	@chmod +x test_makefile.sh 2>/dev/null || true
+	@./test_makefile.sh
+
+.PHONY: test-integration
+test-integration: build
+	@echo "运行集成测试..."
+	@echo ""
+	@echo "--- DRM 设备测试 ---"
+	@sudo ./$(BINDIR)/test_drm
+	@echo ""
+	@echo "--- 帮助信息测试 ---"
+	@./$(TARGET) --help > /dev/null && echo "  ✓ 帮助信息"
+	@echo ""
+	@echo "--- 参数解析测试 ---"
+	@./$(TARGET) --help 2>&1 | grep -q "Usage:" && echo "  ✓ 参数解析"
+	@echo ""
+	@echo "集成测试完成"
+
+.PHONY: test-e2e
+test-e2e: build
+	@echo "运行 E2E 测试..."
+	@chmod +x test_e2e.sh 2>/dev/null || true
+	@./test_e2e.sh
+
+.PHONY: test-display
+test-display: build
+	@echo "运行显示器测试..."
+	@echo ""
+	@echo "--- 检测显示器 ---"
+	@sudo ./$(BINDIR)/test_drm 2>&1 | grep -E "(CONNECTED|Preferred)"
+	@echo ""
+	@echo "--- 显示 HUD (5秒) ---"
+	@echo "请观察屏幕左上角是否显示 'Hello LinuxHUD!'"
+	@echo ""
+	@timeout 5 sudo ./$(TARGET) -t "Hello LinuxHUD!" -x 50 -y 50 -w 400 -h 100 -a 200 -s 28 -v 2>&1 || true
+	@echo ""
+	@echo "显示器测试完成"
+
 # ============================================================================
 # 代码质量
 # ============================================================================
@@ -471,9 +536,15 @@ help:
 	@echo "  demo         运行演示"
 	@echo ""
 	@echo "测试目标:"
-	@echo "  test         运行所有测试"
-	@echo "  test-drm     运行 DRM 测试"
-	@echo "  test-quick   快速测试"
+	@echo "  test              运行测试程序"
+	@echo "  test-all          运行所有测试（包括脚本）"
+	@echo "  test-drm          运行 DRM 测试"
+	@echo "  test-quick        快速测试"
+	@echo "  test-project      运行项目结构测试"
+	@echo "  test-build        运行构建系统测试"
+	@echo "  test-integration  运行集成测试"
+	@echo "  test-e2e          运行端到端测试"
+	@echo "  test-display      运行显示器测试"
 	@echo ""
 	@echo "代码质量:"
 	@echo "  lint         代码检查"
@@ -508,8 +579,8 @@ help:
 	@echo "示例:"
 	@echo "  make                    # 显示帮助"
 	@echo "  make build              # 构建项目"
-	@echo "  make DEBUG=1            # 调试构建"
-	@echo "  make test               # 运行测试"
+	@echo "  make test-all           # 运行所有测试"
+	@echo "  make test               # 运行测试程序"
 	@echo "  make run-sudo           # 以 root 运行"
 	@echo "  make install            # 安装到系统"
 	@echo ""

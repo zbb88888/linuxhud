@@ -11,6 +11,9 @@
 
 #define DRM_DEVICE_PATH "/dev/dri/card1"
 
+// 未使用参数宏
+#define UNUSED(x) ((void)(x))
+
 // 查找已连接的连接器
 static int find_connected_connector(int fd, drmModeRes *resources, 
                                    uint32_t *connector_id, uint32_t *crtc_id) {
@@ -27,16 +30,31 @@ static int find_connected_connector(int fd, drmModeRes *resources,
                 encoder = drmModeGetEncoder(fd, connector->encoder_id);
             }
             
-            if (encoder) {
+            if (encoder && encoder->crtc_id) {
                 *crtc_id = encoder->crtc_id;
                 drmModeFreeEncoder(encoder);
             } else {
                 // 查找可用的 CRTC
+                uint32_t possible_crtcs = 0;
+                if (encoder) {
+                    possible_crtcs = encoder->possible_crtcs;
+                    drmModeFreeEncoder(encoder);
+                } else {
+                    // 如果没有编码器，尝试所有 CRTC
+                    possible_crtcs = (1 << resources->count_crtcs) - 1;
+                }
+                
+                // 查找第一个可用的 CRTC
                 for (int j = 0; j < resources->count_crtcs; j++) {
-                    if (connector->encoders[i] & (1 << j)) {
+                    if (possible_crtcs & (1 << j)) {
                         *crtc_id = resources->crtcs[j];
                         break;
                     }
+                }
+                
+                // 如果仍然没有找到，使用第一个 CRTC
+                if (*crtc_id == 0 && resources->count_crtcs > 0) {
+                    *crtc_id = resources->crtcs[0];
                 }
             }
             
@@ -50,6 +68,7 @@ static int find_connected_connector(int fd, drmModeRes *resources,
 
 // 查找 Overlay Plane
 static int find_overlay_plane(int fd, uint32_t crtc_id, uint32_t *plane_id) {
+    UNUSED(crtc_id);  // 直接使用第一个可用的平面
     drmModePlaneRes *plane_resources = drmModeGetPlaneResources(fd);
     if (!plane_resources) return -1;
     
@@ -67,15 +86,13 @@ static int find_overlay_plane(int fd, uint32_t crtc_id, uint32_t *plane_id) {
                 if (prop) {
                     if (strcmp(prop->name, "type") == 0) {
                         if (props->prop_values[j] == DRM_PLANE_TYPE_OVERLAY) {
-                            // 检查平面是否支持当前 CRTC
-                            if (plane->possible_crtcs & (1 << crtc_id)) {
-                                *plane_id = plane->plane_id;
-                                drmModeFreeProperty(prop);
-                                drmModeFreeObjectProperties(props);
-                                drmModeFreePlane(plane);
-                                drmModeFreePlaneResources(plane_resources);
-                                return 0;
-                            }
+                            // 直接使用第一个可用的 Overlay Plane
+                            *plane_id = plane->plane_id;
+                            drmModeFreeProperty(prop);
+                            drmModeFreeObjectProperties(props);
+                            drmModeFreePlane(plane);
+                            drmModeFreePlaneResources(plane_resources);
+                            return 0;
                         }
                     }
                     drmModeFreeProperty(prop);
@@ -99,14 +116,13 @@ static int find_overlay_plane(int fd, uint32_t crtc_id, uint32_t *plane_id) {
                 if (prop) {
                     if (strcmp(prop->name, "type") == 0) {
                         if (props->prop_values[j] == DRM_PLANE_TYPE_CURSOR) {
-                            if (plane->possible_crtcs & (1 << crtc_id)) {
-                                *plane_id = plane->plane_id;
-                                drmModeFreeProperty(prop);
-                                drmModeFreeObjectProperties(props);
-                                drmModeFreePlane(plane);
-                                drmModeFreePlaneResources(plane_resources);
-                                return 0;
-                            }
+                            // 直接使用第一个可用的 Cursor Plane
+                            *plane_id = plane->plane_id;
+                            drmModeFreeProperty(prop);
+                            drmModeFreeObjectProperties(props);
+                            drmModeFreePlane(plane);
+                            drmModeFreePlaneResources(plane_resources);
+                            return 0;
                         }
                     }
                     drmModeFreeProperty(prop);

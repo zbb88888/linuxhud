@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <errno.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
@@ -129,7 +130,7 @@ static linuxhud_error_t init_hud(linuxhud_t *hud, const linuxhud_config_t *confi
 
 // 更新 HUD 显示
 static linuxhud_error_t update_hud(linuxhud_t *hud, const char *text) {
-    if (!hud || hud->state != LINUXHUD_STATE_READY) {
+    if (!hud || (hud->state != LINUXHUD_STATE_READY && hud->state != LINUXHUD_STATE_RUNNING)) {
         return LINUXHUD_ERROR_RENDER;
     }
     
@@ -153,7 +154,7 @@ static linuxhud_error_t update_hud(linuxhud_t *hud, const char *text) {
                               0, 0, hud->config.width << 16, hud->config.height << 16);
     
     if (ret) {
-        perror("Failed to set plane");
+        fprintf(stderr, "Failed to set plane: %s\n", strerror(errno));
         return LINUXHUD_ERROR_RENDER;
     }
     
