@@ -1,12 +1,12 @@
 # LinuxHUD Makefile
-# 绕过图形栈的硬件级平视显示器
+# 硬件级平视显示器
 
 # ============================================================================
 # 项目配置
 # ============================================================================
 
 PROJECT_NAME := linuxhud
-VERSION := 0.1.0
+VERSION := 0.2.0
 
 # ============================================================================
 # 编译器和工具
@@ -30,50 +30,46 @@ OBJDIR := $(BUILDDIR)/obj
 LIBDIR := $(BUILDDIR)/lib
 BINDIR := $(BUILDDIR)/bin
 TESTDIR := tests
-DOCDIR := docs
 
 # ============================================================================
 # 编译选项
 # ============================================================================
 
-# 基础编译标志
 CFLAGS := -Wall -Wextra -Werror -Wpedantic
 CFLAGS += -std=c11
 CFLAGS += -D_GNU_SOURCE
 CFLAGS += -DPROJECT_VERSION=\"$(VERSION)\"
+CFLAGS += -I$(INCDIR)
 
-# 优化级别
 ifdef DEBUG
     CFLAGS += -g -O0 -DDEBUG
 else
     CFLAGS += -O2 -DNDEBUG
 endif
 
-# 包含路径
-CFLAGS += -I$(INCDIR)
 CFLAGS += $(shell pkg-config --cflags libdrm cairo pangocairo 2>/dev/null)
-
-# 链接标志
 LDFLAGS := $(shell pkg-config --libs libdrm cairo pangocairo 2>/dev/null)
 
 # ============================================================================
-# 源文件和目标文件
+# 源文件（按模块组织）
 # ============================================================================
 
-# 主程序源文件
-SRCS := $(wildcard $(SRCDIR)/*.c)
-OBJS := $(SRCS:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+SRCS := $(SRCDIR)/core/types.c \
+        $(SRCDIR)/core/log.c \
+        $(SRCDIR)/core/hud.c \
+        $(SRCDIR)/drm/device.c \
+        $(SRCDIR)/render/renderer.c \
+        $(SRCDIR)/widget/widget.c \
+        $(SRCDIR)/main.c
 
-# 主程序目标
+OBJS := $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SRCS))
+
 TARGET := $(BINDIR)/$(PROJECT_NAME)
 
-# 测试程序
+# 测试程序 (链接库对象)
 TEST_SRCS := $(wildcard $(TESTDIR)/*.c)
-TEST_BINS := $(TEST_SRCS:$(TESTDIR)/%.c=$(BINDIR)/%)
-
-# 库文件（如果需要）
-LIB_NAME := lib$(PROJECT_NAME).a
-LIB_TARGET := $(LIBDIR)/$(LIB_NAME)
+TEST_BINS := $(patsubst $(TESTDIR)/%.c,$(BINDIR)/%,$(TEST_SRCS))
+TEST_OBJS := $(filter-out $(OBJDIR)/main.o, $(OBJS))
 
 # ============================================================================
 # 安装路径
@@ -81,21 +77,16 @@ LIB_TARGET := $(LIBDIR)/$(LIB_NAME)
 
 PREFIX := /usr/local
 BINDIR_INSTALL := $(PREFIX)/bin
-LIBDIR_INSTALL := $(PREFIX)/lib
-INCDIR_INSTALL := $(PREFIX)/include/$(PROJECT_NAME)
 CONFDIR_INSTALL := /etc
 SERVICEDIR_INSTALL := /etc/systemd/system
-MANDIR_INSTALL := $(PREFIX)/share/man/man1
 
 # ============================================================================
 # 默认目标
 # ============================================================================
 
-# 默认显示帮助信息
 .PHONY: all
 all: help
 
-# 构建目标
 .PHONY: build
 build: dirs $(TARGET) $(TEST_BINS)
 	@echo ""
@@ -103,7 +94,6 @@ build: dirs $(TARGET) $(TEST_BINS)
 	@echo "  $(PROJECT_NAME) v$(VERSION) 构建完成"
 	@echo "=========================================="
 	@echo "  可执行文件: $(TARGET)"
-	@echo "  测试程序:   $(TEST_BINS)"
 	@echo "=========================================="
 
 # ============================================================================
@@ -112,10 +102,8 @@ build: dirs $(TARGET) $(TEST_BINS)
 
 .PHONY: dirs
 dirs:
-	@$(MKDIR) $(OBJDIR)
-	@$(MKDIR) $(LIBDIR)
-	@$(MKDIR) $(BINDIR)
-	@$(MKDIR) $(TESTDIR)
+	@$(MKDIR) $(OBJDIR)/core $(OBJDIR)/drm $(OBJDIR)/render $(OBJDIR)/widget
+	@$(MKDIR) $(LIBDIR) $(BINDIR) $(TESTDIR)
 
 # ============================================================================
 # 主程序构建
@@ -128,29 +116,17 @@ $(TARGET): $(OBJS)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@echo "  CC      $<"
+	@$(MKDIR) $(dir $@)
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 # ============================================================================
 # 测试程序构建
 # ============================================================================
 
-$(BINDIR)/%: $(TESTDIR)/%.c
+$(BINDIR)/test_%: $(TESTDIR)/test_%.c $(TEST_OBJS)
 	@echo "  TEST    $@"
 	@$(MKDIR) $(dir $@)
-	@$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
-
-# ============================================================================
-# 库文件构建（可选）
-# ============================================================================
-
-.PHONY: lib
-lib: dirs $(LIB_TARGET)
-	@echo "  库文件构建完成: $(LIB_TARGET)"
-
-$(LIB_TARGET): $(filter-out $(OBJDIR)/main.o, $(OBJS))
-	@echo "  AR      $@"
-	@$(MKDIR) $(dir $@)
-	@$(AR) rcs $@ $^
+	@$(CC) $(CFLAGS) $< $(TEST_OBJS) -o $@ $(LDFLAGS)
 
 # ============================================================================
 # 运行目标
@@ -158,17 +134,14 @@ $(LIB_TARGET): $(filter-out $(OBJDIR)/main.o, $(OBJS))
 
 .PHONY: run
 run: $(TARGET)
-	@echo "运行 $(PROJECT_NAME)..."
 	@./$(TARGET) -t "Hello LinuxHUD" -v
 
 .PHONY: run-sudo
 run-sudo: $(TARGET)
-	@echo "以 root 权限运行 $(PROJECT_NAME)..."
 	@sudo ./$(TARGET) -t "Hello LinuxHUD" -v
 
 .PHONY: demo
 demo: $(TARGET)
-	@echo "运行演示..."
 	@sudo ./run_demo.sh
 
 # ============================================================================
@@ -248,7 +221,7 @@ test-integration: build
 	@./$(TARGET) --help > /dev/null && echo "  ✓ 帮助信息"
 	@echo ""
 	@echo "--- 参数解析测试 ---"
-	@./$(TARGET) --help 2>&1 | grep -q "Usage:" && echo "  ✓ 参数解析"
+	@./$(TARGET) --help 2>&1 | grep -q "用法:" && echo "  ✓ 参数解析"
 	@echo ""
 	@echo "集成测试完成"
 
@@ -266,7 +239,7 @@ test-display: build
 	@sudo ./$(BINDIR)/test_drm 2>&1 | grep -E "(CONNECTED|Preferred)"
 	@echo ""
 	@echo "--- 显示 HUD (5秒) ---"
-	@echo "请观察屏幕左上角是否显示 'Hello LinuxHUD!'"
+	@echo "请观察屏幕左上角是否显示文本"
 	@echo ""
 	@timeout 5 sudo ./$(TARGET) -t "Hello LinuxHUD!" -x 50 -y 50 -w 400 -h 100 -a 200 -s 28 -v 2>&1 || true
 	@echo ""
@@ -290,7 +263,7 @@ lint:
 format:
 	@echo "格式化代码..."
 	@if command -v clang-format > /dev/null; then \
-		clang-format -i $(SRCDIR)/*.c $(INCDIR)/*.h; \
+		find $(SRCDIR) $(INCDIR) -name "*.c" -o -name "*.h" | xargs clang-format -i; \
 		echo "代码格式化完成"; \
 	else \
 		echo "clang-format 未安装"; \
@@ -313,18 +286,14 @@ check-syntax: dirs
 clean:
 	@echo "清理构建文件..."
 	@$(RMDIR) $(BUILDDIR)
-	@$(RM) $(SRCDIR)/*.o
-	@$(RM) *.o
 	@echo "清理完成"
 
 .PHONY: clean-all
 clean-all: clean
 	@echo "深度清理..."
 	@$(RM) $(PROJECT_NAME)
-	@$(RM) test_drm
 	@$(RM) *.log
 	@$(RM) core.*
-	@$(RMDIR) *.dSYM
 	@echo "深度清理完成"
 
 .PHONY: distclean
@@ -369,15 +338,6 @@ uninstall:
 	@systemctl daemon-reload
 	@echo "卸载完成"
 
-.PHONY: install-dev
-install-dev: lib
-	@echo "安装开发文件..."
-	@$(INSTALL) -d $(INCDIR_INSTALL)
-	@$(INSTALL) -m 644 $(INCDIR)/*.h $(INCDIR_INSTALL)/
-	@$(INSTALL) -d $(LIBDIR_INSTALL)
-	@$(INSTALL) -m 644 $(LIB_TARGET) $(LIBDIR_INSTALL)/
-	@echo "开发文件安装完成"
-
 # ============================================================================
 # 打包目标
 # ============================================================================
@@ -392,41 +352,6 @@ dist: clean-all
 		--exclude='build' \
 		.
 	@echo "发布包创建完成: dist/$(PROJECT_NAME)-$(VERSION).tar.gz"
-
-.PHONY: package
-package: build
-	@echo "创建安装包..."
-	@$(MKDIR) package
-	@$(INSTALL) -m 755 $(TARGET) package/
-	@$(INSTALL) -m 644 $(PROJECT_NAME).conf package/
-	@$(INSTALL) -m 644 $(PROJECT_NAME).service package/
-	@$(INSTALL) -m 755 run_demo.sh package/
-	@echo "安装包创建完成: package/"
-
-# ============================================================================
-# 文档目标
-# ============================================================================
-
-.PHONY: docs
-docs:
-	@echo "生成文档..."
-	@if command -v doxygen > /dev/null; then \
-		doxygen; \
-	else \
-		echo "doxygen 未安装，跳过文档生成"; \
-	fi
-
-.PHONY: man
-man:
-	@echo "生成手册页..."
-	@$(MKDIR) man
-	@echo ".TH $(PROJECT_NAME) 1 \"$(VERSION)\" \"LinuxHUD Manual\"" > man/$(PROJECT_NAME).1
-	@echo ".SH NAME" >> man/$(PROJECT_NAME).1
-	@echo "$(PROJECT_NAME) \\- 硬件级平视显示器" >> man/$(PROJECT_NAME).1
-	@echo ".SH SYNOPSIS" >> man/$(PROJECT_NAME).1
-	@echo ".B $(PROJECT_NAME)" >> man/$(PROJECT_NAME).1
-	@echo ".RI [ options ]" >> man/$(PROJECT_NAME).1
-	@echo "手册页生成完成"
 
 # ============================================================================
 # 调试目标
@@ -469,7 +394,6 @@ info:
 	@echo "  源文件:   $(SRCS)"
 	@echo "  目标文件: $(OBJS)"
 	@echo "  目标:     $(TARGET)"
-	@echo "  测试:     $(TEST_BINS)"
 	@echo "=========================================="
 	@echo ""
 	@echo "依赖检查:"
@@ -477,10 +401,6 @@ info:
 	@echo -n "  cairo:      "; pkg-config --exists cairo && echo "✓ 已安装" || echo "✗ 未安装"
 	@echo -n "  pangocairo: "; pkg-config --exists pangocairo && echo "✓ 已安装" || echo "✗ 未安装"
 	@echo ""
-
-.PHONY: version
-version:
-	@echo "$(VERSION)"
 
 .PHONY: check-deps
 check-deps:
@@ -540,8 +460,6 @@ help:
 	@echo "  test-all          运行所有测试（包括脚本）"
 	@echo "  test-drm          运行 DRM 测试"
 	@echo "  test-quick        快速测试"
-	@echo "  test-project      运行项目结构测试"
-	@echo "  test-build        运行构建系统测试"
 	@echo "  test-integration  运行集成测试"
 	@echo "  test-e2e          运行端到端测试"
 	@echo "  test-display      运行显示器测试"
@@ -554,11 +472,6 @@ help:
 	@echo "安装目标:"
 	@echo "  install      安装到系统"
 	@echo "  uninstall    从系统卸载"
-	@echo "  install-dev  安装开发文件"
-	@echo ""
-	@echo "打包目标:"
-	@echo "  dist         创建发布包"
-	@echo "  package      创建安装包"
 	@echo ""
 	@echo "调试目标:"
 	@echo "  debug        调试构建"
@@ -566,21 +479,15 @@ help:
 	@echo "  valgrind     运行 Valgrind"
 	@echo "  strace       运行 strace"
 	@echo ""
-	@echo "文档目标:"
-	@echo "  docs         生成文档"
-	@echo "  man          生成手册页"
-	@echo ""
 	@echo "信息目标:"
 	@echo "  info         显示项目信息"
-	@echo "  version      显示版本"
 	@echo "  check-deps   检查依赖"
 	@echo "  help         显示帮助"
 	@echo ""
 	@echo "示例:"
 	@echo "  make                    # 显示帮助"
 	@echo "  make build              # 构建项目"
-	@echo "  make test-all           # 运行所有测试"
-	@echo "  make test               # 运行测试程序"
+	@echo "  make test               # 运行测试"
 	@echo "  make run-sudo           # 以 root 运行"
 	@echo "  make install            # 安装到系统"
 	@echo ""
