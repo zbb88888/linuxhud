@@ -1,0 +1,30 @@
+[Unit]
+Description=LinuxHUD - Hardware Overlay Display
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/linuxhud -d -t "LinuxHUD Service"
+Restart=on-failure
+RestartSec=5
+
+# 权限设置
+User=root
+Group=video
+
+# 安全设置
+NoNewPrivileges=true
+ProtectSystem=true
+ProtectHome=true
+
+# 资源限制
+LimitNOFILE=1024
+LimitNPROC=1024
+
+# 环境变量
+Environment=DISPLAY=:0
+Environment=WAYLAND_DISPLAY=wayland-0
+
+[Install]
+WantedBy=multi-user.target
