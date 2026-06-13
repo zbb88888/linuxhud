@@ -90,6 +90,9 @@ linuxhud_error_t linuxhud_set_position(linuxhud_t *hud, int32_t x, int32_t y);
 
 /**
  * 设置 HUD 尺寸（会重新分配 buffer，代价较大）
+ *
+ * 注意: 如果 resize 失败，HUD 将处于不可用状态（renderer 和 fb 为 NULL）。
+ *       调用者需要 destroy 后重新 create。
  */
 linuxhud_error_t linuxhud_set_size(linuxhud_t *hud, uint32_t width, uint32_t height);
 

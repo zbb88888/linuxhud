@@ -148,7 +148,7 @@ linuxhud_error_t linuxhud_set_size(linuxhud_t *hud, uint32_t width, uint32_t hei
         return LINUXHUD_OK;
     }
 
-    /* 销毁旧渲染器和 FB */
+    /* 注意: 如果 resize 失败，HUD 将处于不可用状态，需要 destroy 后重新 create */
     linuxhud_renderer_destroy(hud->renderer);
     linuxhud_fb_destroy(hud->fb);
     hud->renderer = NULL;
